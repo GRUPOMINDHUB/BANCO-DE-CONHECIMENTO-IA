@@ -20,10 +20,65 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 
-
 # =========================
 # CONFIG
 # =========================
+st.set_page_config(
+    page_title="IA Corporativa",
+    layout="centered"
+)
+
+# =========================================================
+# 2. BLOCO DE SEGURANÇA (VALIDAÇÃO DE LOGIN)
+# =========================================================
+
+# Passo A: Verificar se o usuário já estava logado nesta sessão
+if "logado" not in st.session_state:
+    st.session_state["logado"] = False
+
+# Passo B: Capturar parâmetro da URL (vindo do seu HTML)
+# O Streamlit 1.30+ usa st.query_params diretamente como um dicionário
+auth_param = st.query_params.get("auth")
+
+# Passo C: Se o parâmetro for 'true', libera o acesso permanentemente nesta sessão
+if auth_param == "true":
+    st.session_state["logado"] = True
+    # Opcional: limpa a URL para ficar bonita
+    # st.query_params.clear()
+
+# Passo D: Se após verificar a URL ele ainda não estiver logado, para a execução
+if not st.session_state["logado"]:
+    # CSS de fundo para a tela de erro não piscar preto
+    st.markdown("<style>.stApp {background-color: #f8f9fa !important;}</style>", unsafe_allow_html=True)
+    st.warning("⚠️ Acesso restrito. Por favor, realize o login.")
+    st.stop()
+
+# =========================================================
+# 3. INJEÇÃO DE CSS PARA FADE-IN (Só roda se passar pela trava)
+# =========================================================
+st.markdown("""
+    <style>
+    /* Fade-in da aplicação */
+    .stApp {
+        
+        animation: fadeInAnimation 1.5s ease-in-out forwards;
+    }
+
+    /* Box Shadow na Sidebar */
+    [data-testid="stSidebar"] {
+        box-shadow: 10px 0px 20px rgba(0, 0, 0, 0.15);
+        border-right: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    @keyframes fadeInAnimation {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    header { visibility: hidden; }
+    </style>
+    """, unsafe_allow_html=True)
+
 load_dotenv()
 
 PASTA_DRIVE_ID = "1KHOOf3uLPaWHnDahcRNl1gIYhMT8v4rE"
@@ -178,7 +233,7 @@ REGRAS:
 2. Ignore empresas com nomes similares mas diferentes do solicitado.
 3. Se não tiver certeza absoluta, marque como "NECESSITA VALIDAÇÃO".
 4. Analise o metadado 'setor' para confirmar se pertence à pasta solicitada.
-5. Sempre dê prioridade MAXIMA para o que o CONTEXTO esta perguntando! Obedecer Sempre, e se por algum acaso não conseguir, explicar o porque
+5. Sempre dê prioridade MAXIMA para o que o PERGUNTA esta perguntando! Obedecer Sempre, e se por algum acaso não conseguir, explicar o porque
 
 CONTEXTO:
 {context}
@@ -223,7 +278,7 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-st.header("🏢 IA Corporativa Interna")
+st.header("🏢 MindLink")
 
 if "chat_engine" not in st.session_state:
     with st.status("Varrendo pastas e subpastas...", expanded=True):

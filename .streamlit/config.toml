@@ -1,0 +1,9 @@
+[theme]
+# Esta cor DEVE ser a mesma #f8f9fa que definimos no seu HTML
+#backgroundColor = "#0d59a5"
+#secondaryBackgroundColor = "#ffffff"
+#primaryColor = "#ffffff"
+#textColor = "#ffffff"
+
+[server]
+headless = true

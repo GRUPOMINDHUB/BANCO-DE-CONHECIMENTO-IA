@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>MindLink IA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='estilo.css') }}">
+</head>
+<body>
+    <div class="chat-wrapper">
+        <div id="chat-box">
+            <div class="msg ia-msg">Olá! Como posso ajudar o Grupo Mindhub hoje?</div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="pergunta" placeholder="Digite sua mensagem...">
+            <button onclick="enviarPergunta()" class="input_btn" style="width: auto; padding: 0 20px;">Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        async function enviarPergunta() {
+            const campo = document.getElementById('pergunta');
+            const box = document.getElementById('chat-box');
+            const msg = campo.value;
+            if(!msg) return;
+
+            // Renderiza pergunta do usuário
+            box.innerHTML += `<div class="msg user-msg">${msg}</div>`;
+            campo.value = '';
+            box.scrollTop = box.scrollHeight;
+
+            // Chama o Flask
+            const response = await fetch('/perguntar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ mensagem: msg })
+            });
+            const data = await response.json();
+
+            // Renderiza resposta da IA
+            box.innerHTML += `<div class="msg ia-msg">${data.resposta}</div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+    </script>
+</body>
+</html>
