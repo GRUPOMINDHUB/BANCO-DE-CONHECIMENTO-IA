@@ -13,6 +13,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_classic.chains import ConversationalRetrievalChain
 from langchain_classic.memory import ConversationBufferMemory
 from langchain_core.prompts import PromptTemplate
+import openpyxl
+import re
 
 load_dotenv()
 
@@ -91,7 +93,8 @@ class EngineIA:
 
         **SINÔNIMOS DE "SUBSTITUIR" (Trocar algo):**
         - Se o usuário disser: "Mude", "Corrija", "Atualize", "Troque X por Y".
-        - AÇÃO TÉCNICA: `[AÇÃO: SUBSTITUIR ...]`
+        - Se for específico (ex: "na linha do fulano"): Use `CONTEXTO`.
+        - Se for geral (ex: "em todo o arquivo"): Use substituição simples.
 
         ---
         ### 2. PROTOCOLO DE MEMÓRIA
@@ -107,8 +110,9 @@ class EngineIA:
         | Inserir no início | `[AÇÃO: TOPO | CONTEÚDO: "texto"]` |
         | Inserir no final | `[AÇÃO: ADICIONAR | CONTEÚDO: "texto"]` |
         | Apagar tudo | `[AÇÃO: LIMPAR]` |
-        | Substituir texto | `[AÇÃO: SUBSTITUIR | DE: "antigo" | PARA: "novo"]` |
-        | **Inserir em local específico** | `[AÇÃO: INSERIR | APÓS: "referencia" | CONTEÚDO: "texto"]` |
+        | Substituir GERAL | `[AÇÃO: SUBSTITUIR | DE: "antigo" | PARA: "novo"]` |
+        | **Substituir com CONTEXTO (Seguro)** | `[AÇÃO: SUBSTITUIR | DE: "valor" | PARA: "novo" | CONTEXTO: "nome ou id da linha"]` |
+        | Inserir em local específico | `[AÇÃO: INSERIR | APÓS: "referencia" | CONTEÚDO: "texto"]` |
 
         **REGRA:** Use SEMPRE aspas duplas nos textos. Ex: `CONTEÚDO: "Texto Aqui"`.
 
@@ -143,41 +147,67 @@ class EngineIA:
         try:
             ext = os.path.splitext(nome_arquivo)[1].lower()
             temp_path = os.path.join("/tmp", f"edit_{file_id}{ext}")
+            
+            # 1. BAIXA O ARQUIVO
             request = self.service.files().get_media(fileId=file_id)
-            fh = io.BytesIO(); downloader = MediaIoBaseDownload(fh, request)
+            fh = io.BytesIO()
+            downloader = MediaIoBaseDownload(fh, request)
             done = False
             while not done: _, done = downloader.next_chunk()
             with open(temp_path, 'wb') as f: f.write(fh.getbuffer())
 
+            # ==========================================
+            # LÓGICA PARA WORD (.DOCX)
+            # ==========================================
             if ext == '.docx':
                 doc = Document(temp_path)
                 
-                # 1. TOPO
                 if "[AÇÃO: TOPO]" in comando_ia:
                     try:
                         txt = comando_ia.split("CONTEÚDO:")[1].replace("]", "").strip()
                         doc.paragraphs[0].insert_paragraph_before(txt)
                     except: pass
 
-                # 2. LIMPAR
                 elif "[AÇÃO: LIMPAR]" in comando_ia:
                     for p in doc.paragraphs: p.text = ""
 
-                # 3. SUBSTITUIR (Seu código funcional)
                 elif "AÇÃO: SUBSTITUIR" in comando_ia:
                     try:
-                        raw_de = comando_ia.split("DE:")[1].split("| PARA:")[0].strip()
-                        raw_para = comando_ia.split("PARA:")[1].split("]")[0].strip()
-                        termo_antigo = raw_de.strip('"').strip("'") 
-                        termo_novo = raw_para.strip('"').strip("'")
+                        # Padrões Regex para capturar o texto, ignorando erros de formatação da IA
+                        # Captura o que está depois de DE: até encontrar | ou PARA:
+                        match_de = re.search(r"DE:\s*['\"]?(.*?)['\"]?\s*(?:\||PARA:)", comando_ia, re.IGNORECASE)
+                        # Captura o que está depois de PARA: até encontrar | ou CONTEXTO: ou ]
+                        match_para = re.search(r"PARA:\s*['\"]?(.*?)['\"]?\s*(?:\||CONTEXTO:|\])", comando_ia, re.IGNORECASE)
+                        # Captura o contexto se houver
+                        match_contexto = re.search(r"CONTEXTO:\s*['\"]?(.*?)['\"]?\s*(?:\||\])", comando_ia, re.IGNORECASE)
 
-                        for p in doc.paragraphs:
-                            if termo_antigo in p.text:
-                                p.text = p.text.replace(termo_antigo, termo_novo)
+                        if match_de and match_para:
+                            termo_antigo = match_de.group(1).strip()
+                            termo_novo = match_para.group(1).strip()
+                            contexto = match_contexto.group(1).strip() if match_contexto else None
+
+                            print(f"DEBUG SUBSTITUIR: De '{termo_antigo}' Para '{termo_novo}' (Contexto: {contexto})")
+
+                            for row in ws.iter_rows():
+                                # Lógica de Contexto
+                                if contexto:
+                                    linha_texto = " ".join([str(c.value) for c in row if c.value])
+                                    if contexto not in linha_texto:
+                                        continue 
+
+                                for cell in row:
+                                    # Converte para string para garantir que ache números (ex: 750 virar "750")
+                                    val_str = str(cell.value) if cell.value is not None else ""
+                                    
+                                    if termo_antigo in val_str:
+                                        # Substitui mantendo o resto do conteúdo da célula
+                                        cell.value = val_str.replace(termo_antigo, termo_novo)
+                        else:
+                            print(f"ERRO DE PARSE: Não consegui ler DE/PARA no comando: {comando_ia}")
+                                    
                     except Exception as e:
-                        print(f"Erro substituição: {e}")
+                        print(f"Erro substituição Excel: {e}")
 
-                # 4. INSERIR ESPECÍFICO (Seu código funcional)
                 elif "AÇÃO: INSERIR" in comando_ia:
                     try:
                         raw_ancora = comando_ia.split("APÓS:")[1].split("| CONTEÚDO:")[0].strip()
@@ -198,19 +228,115 @@ class EngineIA:
                             if not inserido: doc.add_paragraph(f"\n{conteudo}")
                     except: pass
 
-                # 5. ADICIONAR (Padrão)
-                else:
+                else: # ADICIONAR (Padrão)
                     try:
                         txt = comando_ia.split("CONTEÚDO:")[1].replace("]", "").strip()
                         doc.add_paragraph(txt)
                     except: pass
 
                 doc.save(temp_path)
+                mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
-            media = MediaIoBaseUpload(open(temp_path, 'rb'), mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', resumable=True)
+            # ==========================================
+            # LÓGICA PARA EXCEL (.XLSX / .XLSM)
+            # ==========================================
+            elif ext in ['.xlsx', '.xlsm']:
+                is_macro = (ext == '.xlsm')
+                wb = openpyxl.load_workbook(temp_path, keep_vba=is_macro)
+                ws = wb.active 
+                
+                # 1. TOPO
+                if "[AÇÃO: TOPO]" in comando_ia:
+                    try:
+                        txt = comando_ia.split("CONTEÚDO:")[1].replace("]", "").strip()
+                        ws.insert_rows(1)
+                        ws.cell(row=1, column=1, value=txt)
+                    except: pass
+
+                # 2. LIMPAR
+                elif "[AÇÃO: LIMPAR]" in comando_ia:
+                    ws.delete_rows(1, ws.max_row)
+
+                # 3. SUBSTITUIR (AGORA COM CONTEXTO/ÂNCORA)
+                elif "AÇÃO: SUBSTITUIR" in comando_ia:
+                    try:
+                        # Extração dos dados básicos
+                        raw_de = comando_ia.split("DE:")[1].split("|")[0].strip()
+                        raw_para = comando_ia.split("PARA:")[1].split("|")[0].replace("]", "").strip() # Remove ] caso seja o último
+                        
+                        termo_antigo = raw_de.strip('"').strip("'") 
+                        termo_novo = raw_para.strip('"').strip("'")
+                        
+                        # Verifica se existe CONTEXTO
+                        contexto = None
+                        if "CONTEXTO:" in comando_ia:
+                            raw_contexto = comando_ia.split("CONTEXTO:")[1].replace("]", "").strip()
+                            contexto = raw_contexto.strip('"').strip("'")
+
+                        for row in ws.iter_rows():
+                            # Se tiver contexto, verificamos se a linha tem a palavra-chave
+                            if contexto:
+                                # Cria uma string com todo o conteúdo da linha para buscar o contexto
+                                linha_texto = " ".join([str(c.value) for c in row if c.value])
+                                if contexto not in linha_texto:
+                                    continue # Pula essa linha se não tiver o contexto
+
+                            # Faz a substituição na célula
+                            for cell in row:
+                                if cell.value and termo_antigo in str(cell.value):
+                                    val_str = str(cell.value)
+                                    cell.value = val_str.replace(termo_antigo, termo_novo)
+                                    
+                    except Exception as e:
+                        print(f"Erro substituição Excel: {e}")
+
+                # 4. INSERIR ESPECÍFICO
+                elif "AÇÃO: INSERIR" in comando_ia:
+                    try:
+                        raw_ancora = comando_ia.split("APÓS:")[1].split("| CONTEÚDO:")[0].strip()
+                        raw_conteudo = comando_ia.split("CONTEÚDO:")[1].split("]")[0].strip()
+                        ancora = raw_ancora.strip('"').strip("'")
+                        conteudo = raw_conteudo.strip('"').strip("'")
+                        
+                        inserido = False
+                        rows = list(ws.iter_rows()) 
+                        for row in rows:
+                            for cell in row:
+                                if cell.value and ancora in str(cell.value):
+                                    idx = cell.row + 1 
+                                    ws.insert_rows(idx)
+                                    ws.cell(row=idx, column=1, value=conteudo)
+                                    inserido = True
+                                    break
+                            if inserido: break
+                        
+                        if not inserido: ws.append([conteudo])
+                    except: pass
+
+                # 5. ADICIONAR
+                else: 
+                    try:
+                        txt = comando_ia.split("CONTEÚDO:")[1].replace("]", "").strip()
+                        ws.append([txt]) 
+                    except: pass
+
+                wb.save(temp_path)
+                
+                if is_macro:
+                    mime_type = 'application/vnd.ms-excel.sheet.macroEnabled.12'
+                else:
+                    mime_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+            else:
+                return False # Formato não suportado para edição
+
+            # 3. SOBE O ARQUIVO DE VOLTA PRO DRIVE
+            media = MediaIoBaseUpload(open(temp_path, 'rb'), mimetype=mime_type, resumable=True)
             self.service.files().update(fileId=file_id, media_body=media).execute()
             
             if os.path.exists(temp_path): os.remove(temp_path)
             return True
+
         except Exception as e:
-            print(f"Erro: {e}"); return False
+            print(f"Erro Geral: {e}")
+            return False
