@@ -1,12 +1,18 @@
 """
-URL Configuration - migrado das rotas Flask
-Mantém as mesmas URLs do sistema Flask.
+URL Configuration - Mindhub OS
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('apps.usuarios.urls')),
     path('', include('apps.ia_engine.urls')),
+    path('', include('apps.trilha.urls')),
 ]
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

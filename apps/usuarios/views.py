@@ -41,9 +41,15 @@ def login_endpoint(request):
         email = dados.get('email')
         senha = dados.get('senha')
         
-        # Validação usando Django ORM
+        # Validação usando Django ORM (email sem diferenciar maiúsculas)
+        if not email or not senha:
+            return JsonResponse({
+                "status": "erro",
+                "mensagem": "E-mail e senha são obrigatórios"
+            }, status=401)
+        
         try:
-            usuario = Usuario.objects.get(email=email)
+            usuario = Usuario.objects.get(email__iexact=email.strip())
             if usuario.verificar_senha(senha):
                 # Salva usuário na sessão (igual ao Flask)
                 request.session['usuario'] = usuario.email

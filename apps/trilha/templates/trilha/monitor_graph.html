@@ -1,0 +1,660 @@
+{% extends "trilha/base_monitor.html" %}
+
+{% block extra_css %}
+<style>
+    #graph-container {
+        width: 100%;
+        height: calc(100vh - 160px);
+        background: radial-gradient(circle at center, #2a2a2a 0%, #1a1a1a 100%);
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+    }
+    
+    #graph-svg {
+        width: 100%;
+        height: 100%;
+    }
+    
+    .node {
+        cursor: grab;
+    }
+    
+    .node:active {
+        cursor: grabbing;
+    }
+    
+    .node-circle {
+        stroke: rgba(255, 255, 255, 0.3);
+        stroke-width: 2px;
+        filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.5));
+        transition: filter 0.15s ease, stroke-width 0.15s ease;
+    }
+    
+    .node:hover .node-circle {
+        filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.25));
+        stroke-width: 3px;
+    }
+    
+    .node-circle.selected {
+        stroke: #ffffff;
+        stroke-width: 3px;
+        filter: drop-shadow(0 0 12px rgba(227, 6, 19, 0.8));
+    }
+    
+    .node-label {
+        font-family: 'Poppins', sans-serif;
+        font-size: 10px;
+        fill: #ffffff;
+        text-anchor: middle;
+        pointer-events: none;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+    
+    .link {
+        stroke: rgba(255, 255, 255, 0.1);
+        stroke-width: 1px;
+    }
+    
+    /* Legenda */
+    .legend {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(10px);
+        padding: 16px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-size: 12px;
+    }
+    
+    .legend-color {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+    }
+    
+    /* Controls */
+    .graph-controls {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .control-btn {
+        width: 40px;
+        height: 40px;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .control-btn:hover {
+        background: #e30613;
+        border-color: #e30613;
+    }
+    
+    /* Stats Cards */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    
+    .stat-card {
+        background: rgba(63, 63, 63, 0.3);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+    }
+    
+    .stat-number {
+        font-size: 24px;
+        font-weight: 700;
+    }
+    
+    .stat-label {
+        font-size: 12px;
+        color: #9ca3af;
+        margin-top: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number text-green-500" id="stat-nota5">0</div>
+        <div class="stat-label">Nota 5</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number text-lime-500" id="stat-nota4">0</div>
+        <div class="stat-label">Nota 4</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number text-yellow-500" id="stat-nota3">0</div>
+        <div class="stat-label">Nota 3</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number text-orange-500" id="stat-nota2">0</div>
+        <div class="stat-label">Nota 2</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number text-red-500" id="stat-nota1">0</div>
+        <div class="stat-label">Nota 1</div>
+    </div>
+</div>
+
+<!-- Graph Container -->
+<div id="graph-container">
+    <svg id="graph-svg"></svg>
+    
+    <!-- Legenda -->
+    <div class="legend">
+        <div class="text-sm font-semibold mb-2">Nota de Saúde</div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #28a745;"></div>
+            <span>5 - Excelente</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #7cb342;"></div>
+            <span>4 - Bom</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ffc107;"></div>
+            <span>3 - Regular</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ff9800;"></div>
+            <span>2 - Atenção</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #dc3545;"></div>
+            <span>1 - Crítico</span>
+        </div>
+    </div>
+    
+    <!-- Controls -->
+    <div class="graph-controls">
+        <button class="control-btn" id="btn-zoom-in" title="Zoom In">
+            <i class="fas fa-plus"></i>
+        </button>
+        <button class="control-btn" id="btn-zoom-out" title="Zoom Out">
+            <i class="fas fa-minus"></i>
+        </button>
+        <button class="control-btn" id="btn-reset" title="Resetar">
+            <i class="fas fa-compress-arrows-alt"></i>
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ========================================
+// MINDHUB OS - GRAPH VIEW (D3.js)
+// ========================================
+
+let simulation, svg, g, nodes, links;
+let currentZoom = d3.zoomIdentity;
+let selectedNode = null;
+let alunosData = [];
+let isDragging = false;
+let tooltipShowTimer = null;
+let tooltipHideTimer = null;
+const TOOLTIP_SHOW_DELAY = 200;
+const TOOLTIP_HIDE_DELAY = 150;
+
+// Cores por nota
+const CORES = {
+    5: '#28a745',
+    4: '#7cb342',
+    3: '#ffc107',
+    2: '#ff9800',
+    1: '#dc3545'
+};
+
+// Inicializa o grafo
+function initGraph() {
+    const container = document.getElementById('graph-container');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    
+    svg = d3.select('#graph-svg')
+        .attr('width', width)
+        .attr('height', height);
+    
+    // Grupo principal para zoom/pan
+    g = svg.append('g');
+    
+    // Zoom behavior (só aplica em áreas vazias; nós são arrastados separadamente)
+    const zoom = d3.zoom()
+        .scaleExtent([0.3, 3])
+        .on('zoom', (event) => {
+            currentZoom = event.transform;
+            g.attr('transform', event.transform);
+        });
+    
+    svg.call(zoom);
+    
+    // Impede zoom de capturar mousedown quando o clique é em um nó (permite arrastar)
+    svg.on('mousedown.zoom', function(event) {
+        if (event.target.closest && event.target.closest('.node')) {
+            event.stopImmediatePropagation();
+        }
+    }, true);
+    
+    // Controls
+    document.getElementById('btn-zoom-in').addEventListener('click', () => {
+        svg.transition().call(zoom.scaleBy, 1.3);
+    });
+    
+    document.getElementById('btn-zoom-out').addEventListener('click', () => {
+        svg.transition().call(zoom.scaleBy, 0.7);
+    });
+    
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        svg.transition().call(zoom.transform, d3.zoomIdentity);
+    });
+    
+    // Simulação de força
+    simulation = d3.forceSimulation()
+        .force('charge', d3.forceManyBody().strength(-200))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(40))
+        .force('x', d3.forceX(width / 2).strength(0.05))
+        .force('y', d3.forceY(height / 2).strength(0.05));
+    
+    // Carrega dados
+    loadData();
+}
+
+// Carrega dados da API
+async function loadData() {
+    try {
+        const response = await fetch('/api/monitor/alunos/');
+        const data = await response.json();
+        
+        alunosData = data.alunos;
+        updateStats(data.alunos);
+        renderGraph(data.alunos);
+        
+    } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+    }
+}
+
+// Atualiza estatísticas
+function updateStats(alunos) {
+    const contagem = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
+    alunos.forEach(a => contagem[a.nota]++);
+    
+    for (let i = 1; i <= 5; i++) {
+        document.getElementById(`stat-nota${i}`).textContent = contagem[i];
+    }
+}
+
+// Renderiza o grafo
+function renderGraph(alunos) {
+    // Limpa grafo anterior
+    g.selectAll('*').remove();
+    
+    // Prepara dados dos nós
+    const nodesData = alunos.map((aluno, i) => ({
+        id: aluno.id,
+        nome: aluno.nome,
+        email: aluno.email,
+        foto: aluno.foto,
+        nota: aluno.nota,
+        cor: aluno.cor,
+        mundo: aluno.mundo,
+        step: aluno.step,
+        pendentes: aluno.submissoes_pendentes,
+        x: undefined,
+        y: undefined
+    }));
+    
+    // Comportamento de arrastar: converte coordenadas do zoom para o espaço do grafo
+    const dragBehavior = d3.drag()
+        .subject(function(event, d) { return d; })
+        .on('start', dragstarted)
+        .on('drag', dragged)
+        .on('end', dragended);
+    
+    // Cria grupos de nós
+    const nodeGroups = g.selectAll('.node')
+        .data(nodesData)
+        .enter()
+        .append('g')
+        .attr('class', 'node')
+        .call(dragBehavior)
+        .on('click', (event, d) => {
+            if (isDragging) return;
+            event.stopPropagation();
+            selectNode(d);
+        })
+        .on('mouseover', (event, d) => {
+            clearTimeout(tooltipHideTimer);
+            tooltipShowTimer = setTimeout(() => showTooltip(event, d), TOOLTIP_SHOW_DELAY);
+        })
+        .on('mouseout', () => {
+            clearTimeout(tooltipShowTimer);
+            tooltipHideTimer = setTimeout(hideTooltip, TOOLTIP_HIDE_DELAY);
+        });
+    
+    // Círculos
+    nodeGroups.append('circle')
+        .attr('class', 'node-circle')
+        .attr('r', d => 20 + (d.pendentes * 2)) // Maior se tem pendentes
+        .attr('fill', d => d.cor);
+    
+    // Indicador de pendentes
+    nodeGroups.filter(d => d.pendentes > 0)
+        .append('circle')
+        .attr('r', 8)
+        .attr('cx', 15)
+        .attr('cy', -15)
+        .attr('fill', '#e30613');
+    
+    nodeGroups.filter(d => d.pendentes > 0)
+        .append('text')
+        .attr('x', 15)
+        .attr('y', -11)
+        .attr('text-anchor', 'middle')
+        .attr('fill', 'white')
+        .attr('font-size', '10px')
+        .attr('font-weight', 'bold')
+        .text(d => d.pendentes);
+    
+    // Labels
+    nodeGroups.append('text')
+        .attr('class', 'node-label')
+        .attr('dy', 35)
+        .text(d => d.nome.split(' ')[0]); // Só primeiro nome
+    
+    // Atualiza simulação
+    simulation.nodes(nodesData)
+        .on('tick', () => {
+            nodeGroups.attr('transform', d => `translate(${d.x}, ${d.y})`);
+        });
+    
+    simulation.alpha(1).restart();
+}
+
+// Drag functions
+function dragstarted(event, d) {
+    event.sourceEvent.stopPropagation();
+    isDragging = true;
+    clearTimeout(tooltipShowTimer);
+    clearTimeout(tooltipHideTimer);
+    hideTooltip();
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+}
+
+function dragged(event, d) {
+    // Converte coordenadas da tela (com zoom) para o espaço do grafo
+    const transform = d3.zoomTransform(svg.node());
+    const p = transform.invert([event.x, event.y]);
+    d.fx = p[0];
+    d.fy = p[1];
+}
+
+function dragended(event, d) {
+    if (!event.active) simulation.alphaTarget(0);
+    d.fx = null;
+    d.fy = null;
+    setTimeout(() => { isDragging = false; }, 0);
+}
+
+// Tooltip
+function showTooltip(event, d) {
+    clearTimeout(tooltipHideTimer);
+    const tooltip = document.getElementById('tooltip');
+    tooltip.innerHTML = `
+        <strong>${d.nome}</strong><br>
+        ${d.email}<br>
+        <span style="color: ${d.cor}">Nota: ${d.nota}</span>
+        ${d.mundo ? `<br>Mundo ${d.mundo.numero}: ${d.mundo.nome}` : ''}
+        ${d.pendentes > 0 ? `<br><span style="color: #e30613">${d.pendentes} pendente(s)</span>` : ''}
+    `;
+    tooltip.style.left = (event.pageX + 15) + 'px';
+    tooltip.style.top = (event.pageY - 10) + 'px';
+    tooltip.classList.add('visible');
+}
+
+function hideTooltip() {
+    clearTimeout(tooltipShowTimer);
+    document.getElementById('tooltip').classList.remove('visible');
+}
+
+// Seleciona nó e abre drawer
+async function selectNode(d) {
+    // Remove seleção anterior
+    d3.selectAll('.node-circle').classed('selected', false);
+    
+    // Seleciona novo
+    d3.selectAll('.node-circle')
+        .filter(node => node.id === d.id)
+        .classed('selected', true);
+    
+    selectedNode = d;
+    
+    // Busca detalhes do aluno
+    try {
+        const response = await fetch(`/api/monitor/aluno/${d.id}/`);
+        const data = await response.json();
+        
+        renderDrawer(data);
+        openDrawer();
+    } catch (error) {
+        console.error('Erro ao carregar detalhes:', error);
+    }
+}
+
+// Renderiza conteúdo do drawer
+function renderDrawer(data) {
+    const content = document.getElementById('drawer-content');
+    const aluno = data.aluno;
+    const saude = data.saude;
+    const progresso = data.progresso;
+    
+    content.innerHTML = `
+        <!-- Header -->
+        <div class="flex justify-between items-start mb-6">
+            <div class="flex items-center gap-4">
+                <div class="w-16 h-16 rounded-full bg-mindhub-gray flex items-center justify-center overflow-hidden">
+                    ${aluno.foto 
+                        ? `<img src="${aluno.foto}" class="w-full h-full object-cover">` 
+                        : `<i class="fas fa-user text-2xl text-gray-400"></i>`}
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold">${aluno.nome || aluno.email.split('@')[0]}</h3>
+                    <p class="text-sm text-gray-400">${aluno.email}</p>
+                </div>
+            </div>
+            <button onclick="closeDrawer()" class="text-gray-400 hover:text-white">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        
+        <!-- Nota de Saúde -->
+        <div class="glass rounded-lg p-4 mb-4">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-sm text-gray-400">Nota de Saúde</span>
+                <div class="flex items-center gap-2">
+                    <div class="w-4 h-4 rounded-full" style="background: ${saude.cor}"></div>
+                    <span class="text-2xl font-bold">${saude.nota_atual}</span>
+                </div>
+            </div>
+            
+            <!-- Seletor de Nota -->
+            <div class="flex gap-2 mt-3">
+                ${[1,2,3,4,5].map(n => `
+                    <button onclick="atualizarNota(${aluno.id}, ${n})" 
+                            class="flex-1 py-2 rounded-lg text-sm font-medium transition-all
+                                   ${n === saude.nota_atual ? 'ring-2 ring-white' : 'opacity-60 hover:opacity-100'}"
+                            style="background: ${CORES[n]}">
+                        ${n}
+                    </button>
+                `).join('')}
+            </div>
+        </div>
+        
+        <!-- Progresso -->
+        <div class="glass rounded-lg p-4 mb-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-gray-400">Progresso na Trilha</span>
+                <span class="text-sm font-medium">${progresso.porcentagem}%</span>
+            </div>
+            <div class="w-full bg-mindhub-gray/50 rounded-full h-2 mb-3">
+                <div class="bg-mindhub-red h-2 rounded-full transition-all" 
+                     style="width: ${progresso.porcentagem}%"></div>
+            </div>
+            ${progresso.mundo_atual ? `
+                <div class="flex items-center gap-2 text-sm">
+                    <i class="fas fa-${progresso.mundo_atual.icone} text-mindhub-red"></i>
+                    <span>Mundo ${progresso.mundo_atual.numero}: ${progresso.mundo_atual.nome}</span>
+                </div>
+                ${progresso.step_atual ? `
+                    <p class="text-sm text-gray-400 mt-1">
+                        Step atual: ${progresso.step_atual.titulo}
+                    </p>
+                ` : ''}
+            ` : '<p class="text-sm text-gray-400">Ainda não iniciou a trilha</p>'}
+        </div>
+        
+        <!-- Submissões Pendentes -->
+        ${data.submissoes_pendentes.length > 0 ? `
+            <div class="glass rounded-lg p-4 mb-4">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-sm text-gray-400">Pendentes de Validação</span>
+                    <span class="bg-mindhub-red text-white text-xs px-2 py-0.5 rounded-full">
+                        ${data.submissoes_pendentes.length}
+                    </span>
+                </div>
+                <div class="space-y-2">
+                    ${data.submissoes_pendentes.map(s => `
+                        <a href="/monitor/validar?submissao=${s.id}" 
+                           class="block p-3 bg-mindhub-dark/50 rounded-lg hover:bg-mindhub-gray/30 transition-all">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm">${s.step}</span>
+                                <i class="fas fa-chevron-right text-xs text-gray-400"></i>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1">${formatDate(s.data_envio)}</p>
+                        </a>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+        
+        <!-- Ações -->
+        <div class="space-y-2">
+            <a href="/monitor/validar?aluno=${aluno.id}" 
+               class="flex items-center justify-center gap-2 w-full py-3 bg-mindhub-red hover:bg-red-700 
+                      rounded-lg text-white font-medium transition-all">
+                <i class="fas fa-clipboard-check"></i>
+                Ver Submissões
+            </a>
+            <button onclick="enviarAlerta(${aluno.id})" 
+                    class="flex items-center justify-center gap-2 w-full py-3 bg-mindhub-gray/50 
+                           hover:bg-mindhub-gray rounded-lg text-white font-medium transition-all">
+                <i class="fab fa-whatsapp"></i>
+                Enviar Alerta
+            </button>
+        </div>
+    `;
+}
+
+// Atualiza nota do aluno
+async function atualizarNota(alunoId, nota) {
+    try {
+        const response = await fetch(`/api/monitor/aluno/${alunoId}/nota/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ nota })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Atualiza grafo
+            loadData();
+            
+            // Atualiza drawer se aberto
+            if (selectedNode && selectedNode.id === alunoId) {
+                selectNode(selectedNode);
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao atualizar nota:', error);
+    }
+}
+
+// Envia alerta WhatsApp (placeholder)
+async function enviarAlerta(alunoId) {
+    try {
+        const response = await fetch(`/api/monitor/aluno/${alunoId}/alerta/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        alert(data.message || data.error);
+    } catch (error) {
+        console.error('Erro ao enviar alerta:', error);
+    }
+}
+
+// Formata data
+function formatDate(isoString) {
+    const date = new Date(isoString);
+    return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+}
+
+// Função global de refresh
+function refreshData() {
+    loadData();
+}
+
+// Resize handler
+window.addEventListener('resize', () => {
+    const container = document.getElementById('graph-container');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    
+    svg.attr('width', width).attr('height', height);
+    simulation.force('center', d3.forceCenter(width / 2, height / 2));
+    simulation.alpha(0.3).restart();
+});
+
+// Init
+document.addEventListener('DOMContentLoaded', initGraph);
+</script>
+{% endblock %}

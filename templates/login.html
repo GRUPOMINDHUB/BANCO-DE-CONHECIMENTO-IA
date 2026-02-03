@@ -49,8 +49,12 @@
                     // Efeito visual
                     document.body.classList.add('fade-out');
                     
+                    // Admin e Monitor vão para o painel; Aluno vai para o chat IA
+                    const role = dados.role || '';
+                    const url = (role === 'ADMIN' || role === 'MONITOR') ? '/monitor/' : '/ia';
+                    
                     setTimeout(() => {
-                        window.location.href = "/ia";
+                        window.location.href = url;
                     }, 1200);
                 } else {
                     alert(dados.mensagem || "Erro ao fazer login");

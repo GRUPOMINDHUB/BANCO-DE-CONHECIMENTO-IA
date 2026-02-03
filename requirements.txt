@@ -1,0 +1,17 @@
+django>=4.2.0
+django-cors-headers
+python-dotenv
+google-api-python-client
+google-auth
+pandas
+openpyxl
+python-docx
+langchain>=0.3.0
+langchain-openai
+langchain-community
+langchain-text-splitters
+langchain-core
+langchain-classic
+gunicorn
+psycopg2-binary
+Pillow
