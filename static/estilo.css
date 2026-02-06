@@ -227,3 +227,27 @@ body {
     background-color: #6c757d;
     cursor: not-allowed;
 }
+
+.input_btn.secondary {
+    background-color: #e9ecef;
+    color: #343a40;
+    margin-top: 10px;
+}
+
+.input_btn.secondary:hover {
+    background-color: #dee2e6;
+}
+
+.helper-text {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #6c757d;
+    text-align: center;
+}
+
+.error-text {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #c1121f;
+    text-align: center;
+}

@@ -1,0 +1,115 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'estilo.css' %}">
+    <title>Criar Conta - Mindhub</title>
+</head>
+<body>
+    <h1 class="titulo-boas-vindas">Criar Conta</h1>
+    <div class="login-container">
+        <h2 style="color: #343a40; margin-bottom: 20px;">Grupo Mindhub</h2>
+        <label>Nome</label>
+        <input type="text" class="input_login" id="nome" placeholder="seu nome">
+        <label>Sobrenome</label>
+        <input type="text" class="input_login" id="sobrenome" placeholder="seu sobrenome">
+        <label>Data de nascimento</label>
+        <input type="date" class="input_login" id="data_nascimento">
+        <label>E-mail corporativo</label>
+        <input type="email" class="input_login" id="email" placeholder="nome@grupomindhub.com">
+        <label>Senha</label>
+        <input type="password" class="input_login" id="senha" placeholder="sua senha">
+        <label>Confirmacao de senha</label>
+        <input type="password" class="input_login" id="confirmacao" placeholder="confirme sua senha">
+        <input type="button" class="input_btn" id="signup_btn" value="Criar conta">
+        <input type="button" class="input_btn secondary" id="voltar_btn" value="Voltar ao login">
+        <p id="mensagem" class="helper-text">Somente e-mails @grupomindhub.com sao permitidos.</p>
+    </div>
+
+    <script>
+        const btnCadastrar = document.querySelector('#signup_btn');
+        const btnVoltar = document.querySelector('#voltar_btn');
+        const mensagem = document.querySelector('#mensagem');
+        const dominioPermitido = '@grupomindhub.com';
+
+        function validarSenha(senha) {
+            const temMinimo = senha.length >= 8;
+            const temNumero = /\d/.test(senha);
+            const temLetra = /[a-zA-Z]/.test(senha);
+            return temMinimo && temNumero && temLetra;
+        }
+
+        btnCadastrar.addEventListener('click', async () => {
+            const payload = {
+                nome: document.querySelector('#nome').value.trim(),
+                sobrenome: document.querySelector('#sobrenome').value.trim(),
+                data_nascimento: document.querySelector('#data_nascimento').value,
+                email: document.querySelector('#email').value.trim(),
+                senha: document.querySelector('#senha').value,
+                confirmacao_senha: document.querySelector('#confirmacao').value,
+            };
+
+            if (!payload.email.endsWith(dominioPermitido)) {
+                mensagem.className = 'error-text';
+                mensagem.textContent = `Use apenas e-mails ${dominioPermitido}.`;
+                return;
+            }
+
+            if (!validarSenha(payload.senha)) {
+                mensagem.className = 'error-text';
+                mensagem.textContent = 'Senha fraca: minimo 8 caracteres, com letras e numeros.';
+                return;
+            }
+
+            try {
+                const resposta = await fetch('/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const dados = await resposta.json();
+
+                if (resposta.ok) {
+                    mensagem.className = 'helper-text';
+                    mensagem.textContent = 'Codigo enviado. Verifique seu e-mail.';
+                    setTimeout(() => {
+                        window.location.href = `/verificar?email=${encodeURIComponent(payload.email)}`;
+                    }, 800);
+                } else {
+                    mensagem.className = 'error-text';
+                    mensagem.textContent = dados.mensagem || 'Erro ao criar conta.';
+                }
+            } catch (erro) {
+                console.error('Erro na requisicao:', erro);
+                mensagem.className = 'error-text';
+                mensagem.textContent = 'Erro ao conectar com o servidor.';
+            }
+        });
+
+        btnVoltar.addEventListener('click', () => {
+            window.location.href = '/';
+        });
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+</html>

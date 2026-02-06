@@ -17,7 +17,7 @@ load_dotenv()
 SECRET_KEY = 'Mindhub@1417!'  # Mesmo valor do Flask app.secret_key
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
+DEBUG = True
 
 ALLOWED_HOSTS = ['*']  # Para Cloud Run
 
@@ -77,7 +77,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR.parent / 'usuarios.db',  # Usa o mesmo banco do Flask
+        'NAME': BASE_DIR / 'usuarios.db',  # Usa o mesmo banco do Flask
     }
 }
 
@@ -124,3 +124,19 @@ SESSION_COOKIE_SECURE = not DEBUG
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PASTA_DRIVE_ID = "1KHOOf3uLPaWHnDahcRNl1gIYhMT8v4rE"
 ARQUIVO_CREDENCIAIS = "credentials.json"
+
+# Cadastro corporativo
+SIGNUP_ALLOWED_DOMAIN = "grupomindhub.com"
+SIGNUP_VERIFICATION_EXPIRATION_MINUTES = 15
+
+# Email (usar SMTP em produção)
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@grupomindhub.com")

@@ -1,0 +1,89 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'estilo.css' %}">
+    <title>Verificar E-mail - Mindhub</title>
+</head>
+<body>
+    <h1 class="titulo-boas-vindas">Verificar E-mail</h1>
+    <div class="login-container">
+        <h2 style="color: #343a40; margin-bottom: 20px;">Codigo de verificacao</h2>
+        <label>E-mail</label>
+        <input type="email" class="input_login" id="email" value="{{ email }}" placeholder="nome@grupomindhub.com">
+        <label>Codigo</label>
+        <input type="text" class="input_login" id="codigo" placeholder="000000">
+        <input type="button" class="input_btn" id="verificar_btn" value="Confirmar">
+        <input type="button" class="input_btn secondary" id="voltar_btn" value="Voltar ao login">
+        <p id="mensagem" class="helper-text">Use o codigo enviado para o seu e-mail.</p>
+    </div>
+
+    <script>
+        const btnVerificar = document.querySelector('#verificar_btn');
+        const btnVoltar = document.querySelector('#voltar_btn');
+        const mensagem = document.querySelector('#mensagem');
+
+        btnVerificar.addEventListener('click', async () => {
+            const payload = {
+                email: document.querySelector('#email').value.trim(),
+                codigo: document.querySelector('#codigo').value.trim()
+            };
+
+            if (payload.codigo.length !== 6) {
+                mensagem.className = 'error-text';
+                mensagem.textContent = 'Informe o codigo de 6 digitos.';
+                return;
+            }
+
+            try {
+                const resposta = await fetch('/verificar-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const dados = await resposta.json();
+
+                if (resposta.ok) {
+                    mensagem.className = 'helper-text';
+                    mensagem.textContent = 'Conta verificada. Voce ja pode fazer login.';
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1000);
+                } else {
+                    mensagem.className = 'error-text';
+                    mensagem.textContent = dados.mensagem || 'Erro ao verificar conta.';
+                }
+            } catch (erro) {
+                console.error('Erro na requisicao:', erro);
+                mensagem.className = 'error-text';
+                mensagem.textContent = 'Erro ao conectar com o servidor.';
+            }
+        });
+
+        btnVoltar.addEventListener('click', () => {
+            window.location.href = '/';
+        });
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+</html>
